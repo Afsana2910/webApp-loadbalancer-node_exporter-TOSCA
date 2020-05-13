@@ -1,0 +1,279 @@
+tosca_definitions_version: tosca_simple_yaml_1_3
+node_types:
+  my.nodes.VM.OpenStack:
+    derived_from: tosca.nodes.Compute
+    properties:
+      name:
+        type: string
+        description: Name that should be given to the VM in OpenStack
+      image:
+        type: string
+        description: OpenStack image id (image names are not accepted)
+      flavor:
+        type: string
+        description: OpenStack flavor id (flavor names are not accepted)
+      network:
+        type: string
+        description: OpenStack network id (network names are not accepted)
+      key_name:
+        type: string
+        description: OpenStack SSH key name that should be placed on the VM
+    attributes:
+      id:
+        type: string
+        description: OpenStack id of the VM
+    interfaces:
+      Standard:
+        type: tosca.interfaces.node.lifecycle.Standard
+        operations:
+          create:
+            inputs:
+              vm_name:  { default: { get_property: [ SELF, name     ] } }
+              image:    { default: { get_property: [ SELF, image    ] } }
+              flavor:   { default: { get_property: [ SELF, flavor   ] } }
+              network:  { default: { get_property: [ SELF, network  ] } }
+              key_name: { default: { get_property: [ SELF, key_name ] } }
+            implementation: playbooks/vm/create.yml
+          delete:
+            inputs:
+              id: { default: { get_attribute: [ SELF, id ] } }
+            implementation: playbooks/vm/delete.yml
+
+  my.nodes.Nginx:
+    derived_from: tosca.nodes.SoftwareComponent
+    attributes:
+      site_config_dir:
+        type: string
+        description: Location of nginx site configs
+      remote_host_ip:
+        type: string
+        description: Location of nginx site configs
+    requirements:
+      - connectToLB:
+          capability: tosca.capabilities.Endpoint
+          node: my.nodes.Nginx.loadBalancer
+          relationship: radon.relationships.LB_WebApp  
+    capabilities:
+      host:
+         type: tosca.capabilities.Compute
+         valid_source_types: [my.nodes.Nginx.Site]
+#      connectToLB:
+#         type: tosca.capabilities.Endpoint
+#         valid_source_types: [my.nodes.Nginx.loadBalancer]
+    interfaces:
+      Standard:
+        type: tosca.interfaces.node.lifecycle.Standard
+        operations:
+          create:
+            implementation:
+              primary: playbooks/nginx/install.yml
+          delete:
+            implementation:
+              primary: playbooks/nginx/uninstall.yml
+
+
+
+  my.nodes.Nginx.loadBalancer:
+    derived_from: tosca.nodes.SoftwareComponent
+    attributes:
+      site_config_dir:
+        type: string
+        description: Location of nginx site configs
+      remote_host_ip:
+        type: string
+        description: Location of nginx site configs
+    capabilities:
+      connectToLB:
+         type: tosca.capabilities.Endpoint
+         valid_source_types: [my.nodes.Nginx]
+#    requirements:
+#      - connectToLB:
+#          capability: tosca.capabilities.Endpoint
+#          node: my.nodes.Nginx
+#          relationship: radon.relationships.LB_WebApp
+    interfaces:
+      Standard:
+        type: tosca.interfaces.node.lifecycle.Standard
+        operations:
+          create:
+            implementation:
+              primary: playbooks/lb/install.yml
+          delete:
+            implementation:
+              primary: playbooks/lb/uninstall.yml
+
+
+
+  my.nodes.Nginx.Site:
+    derived_from: tosca.nodes.SoftwareComponent
+    properties:
+      hostname:
+        type: string
+        description: IP of the remote database
+    requirements:
+      - host:
+          capability: tosca.capabilities.Compute
+          relationship: my.relationships.NginxSiteHosting
+    interfaces:
+      Standard:
+        type: tosca.interfaces.node.lifecycle.Standard
+        operations:
+          create:
+            inputs:
+              hostname: { default: { get_property: [ SELF, hostname ] } }
+            implementation: playbooks/site/create.yml
+          delete: playbooks/site/delete.yml
+
+  my.nodes.NodeExporter:
+    derived_from: tosca.nodes.SoftwareComponent
+    requirements:
+      - host:
+          capability: tosca.capabilities.Compute
+          relationship: tosca.relationships.HostedOn
+    interfaces:
+      Standard:
+        type: tosca.interfaces.node.lifecycle.Standard
+        operations:
+          create: playbooks/node_exporter/node_exporter.yml
+
+relationship_types:  
+  radon.relationships.LB_WebApp:
+     derived_from: tosca.relationships.ConnectsTo
+     description: Allow the new web App to be connected to a existing load balancer.
+     # valid_target_types: [ my.nodes.Nginx.loadBalancer ]
+     interfaces:
+        Configure:
+          operations:   
+            post_configure_target:
+              inputs:
+#                LB_end_point_IP: { default: { get_attribute: [TARGET, host, public_address] } }
+                WebApp_end_points_IP: { default: { get_attribute: [SOURCE, host, public_address] } }  
+              implementation:
+                  primary: playbooks/nginx/add_webApp.yml
+
+  my.relationships.NginxSiteHosting:
+    derived_from: tosca.relationships.HostedOn
+    # valid_target_types: [my.nodes.Nginx]
+    interfaces:
+      Standard:
+        type: tosca.interfaces.node.lifecycle.Standard
+        operations:
+          post_configure_source:
+            implementation:
+              primary: playbooks/nginx/reload.yml
+
+
+topology_template:
+  node_templates:
+    vm_loadBalancer:
+      type: my.nodes.VM.OpenStack
+      properties:
+        name: nginxRadon_loadBalancer
+        image: centos7
+        flavor: m1.xsmall
+        network: provider_64_net
+        key_name: key_khan
+
+
+    vm1:
+      type: my.nodes.VM.OpenStack
+      properties:
+        name: nginxRadon_Host1
+        image: centos7
+        flavor: m1.xsmall
+        network: provider_64_net
+        key_name: key_khan
+
+    node1:
+      type: my.nodes.NodeExporter
+      requirements:
+        - host: vm1
+
+
+    vm2:
+      type: my.nodes.VM.OpenStack
+      properties:
+        name: nginxRadon_Host2
+        image: centos7
+        flavor: m1.xsmall
+        network: provider_64_net
+        key_name: key_khan
+
+    node2:
+      type: my.nodes.NodeExporter
+      requirements:
+        - host: vm2
+
+
+    vm3:
+      type: my.nodes.VM.OpenStack
+      properties:
+        name: nginxRadon_Host3
+        image: centos7
+        flavor: m1.xsmall
+        network: provider_64_net
+        key_name: key_khan
+
+    node3:
+      type: my.nodes.NodeExporter
+      requirements:
+        - host: vm3
+
+
+    nginx-lb:
+      type: my.nodes.Nginx.loadBalancer
+      requirements:
+        - host: vm_loadBalancer
+
+
+    nginx:
+      type: my.nodes.Nginx
+      requirements:
+        - host: vm1
+        - connectToLB: nginx-lb
+
+
+    site:
+      type: my.nodes.Nginx.Site      
+      properties:
+            hostname: site1
+      requirements:
+        - host: nginx
+
+
+    nginx2:
+      type: my.nodes.Nginx
+      requirements:
+        - host: vm2
+        - connectToLB: nginx-lb
+
+
+
+    site2:
+      type: my.nodes.Nginx.Site
+      properties:
+            hostname: site2
+      requirements:
+        - host: nginx2
+
+    nginx3:
+      type: my.nodes.Nginx
+      requirements:
+        - host: vm3
+        - connectToLB: nginx-lb
+
+
+
+    site3:
+      type: my.nodes.Nginx.Site
+      properties:
+            hostname: site3
+      requirements:
+        - host: nginx3
+
+
+
+
+
+
+

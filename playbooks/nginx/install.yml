@@ -1,0 +1,37 @@
+---
+- hosts: all
+  become: yes
+  tasks:
+
+    - name: Install EPEL repo
+      package:
+        name:
+          - epel-release
+
+
+    - name: Install nginx
+      package:
+        name: 
+          - nginx
+
+    
+    - name: backup existing config file
+      command: cp /etc/nginx/nginx.conf /etc/nginx/nginx.conf.old
+  
+    - name: upload the nginx config file
+      copy:
+        src: /home/ubuntu/opera/xopera-opera-0.5.1/webApp-loadbalancer-DB-TOSCA/playbooks/nginx/nginx.conf
+        dest: /etc/nginx/nginx.conf
+    
+
+
+    - name: Start nginx
+      service:
+        name: nginx
+        enabled: yes
+        state: started
+
+    - name: Set attributes
+      set_stats:
+        data:
+          site_config_dir: /etc/nginx/conf.d

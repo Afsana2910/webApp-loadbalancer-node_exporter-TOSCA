@@ -1,0 +1,40 @@
+---
+- hosts: all
+  become: yes
+  tasks:
+    - name: Install EPEL repo
+      package:
+        name: 
+          - epel-release
+
+    - name: Install nginx
+      package:
+        name: 
+          - nginx
+    # # The following 2 tasks should be in executed when a new webApp is created and the load balancer needs to be reconfigured.
+    ## move the following 2 tasks to the add_webApp.yml file
+    - name: Edit nginx/config  file - 1 
+      become: yes
+      become_method: sudo
+      lineinfile:
+        path: /etc/nginx/nginx.conf
+        line: 'upstream balancer{ server 0.0.0.0; }'
+        # line: 'upstream balancer{ server {{server1_ip}}; server {{server2_ip}}; }'
+        insertbefore: '^\s+server\s\{'
+
+    - name: Edit nginx/config  file - 2
+      replace:
+        path: /etc/nginx/nginx.conf
+        regexp: '^\s+location\s\/\s\{\s+\}'
+        replace: 'location / { proxy_set_header Host $host; proxy_pass http://balancer; }'
+
+    - name: Start nginx
+      service:
+        name: nginx
+        enabled: yes
+        state: started
+
+    - name: Set attributes
+      set_stats:
+        data:
+          site_config_dir: /etc/nginx/conf.d

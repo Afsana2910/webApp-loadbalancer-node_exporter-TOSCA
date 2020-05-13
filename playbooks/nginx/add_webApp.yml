@@ -1,0 +1,28 @@
+---
+- hosts: all
+  become: yes
+  tasks:
+
+    # - name: Edit nginx/config  file - 1 
+    #   become: yes
+    #   become_method: sudo
+    #   lineinfile:
+    #     path: /etc/nginx/nginx.conf
+    #     line: 'upstream balancer{ server {{WebApp_end_points_IP}}; server 0.0.0.0; }'
+    #     # line: 'upstream balancer{ server {{server1_ip}}; server {{server2_ip}}; }'
+    #     insertbefore: '^\s+server\s\{'
+
+    - name: Edit nginx/config  file - 1 
+      become: yes
+      become_method: sudo
+      shell: |    
+        sed  's/upstream balancer{/upstream balancer{ server {{ WebApp_end_points_IP }};/g' /etc/nginx/nginx.conf > temp.txt
+        cat temp.txt > /etc/nginx/nginx.conf
+        rm temp.txt
+        
+    - name: Restart nginx
+      service:
+        name: nginx
+        state: restarted
+
+
