@@ -40,7 +40,7 @@
     - name: install unit file to systemd
       template:
         remote_src: no
-        src: /home/ubuntu/opera/xopera-opera-0.5.1/webApp-loadbalancer-DB-TOSCA/playbooks/node_exporter/node_exporter.service
+        src: /home/ubuntu/opera/xopera-opera-0.5.1/webApp-loadbalancer-node_exporter-TOSCA/playbooks/node_exporter/node_exporter.service
         dest: /etc/systemd/system/node_exporter.service
     - name: configure systemd to use service
       systemd:
